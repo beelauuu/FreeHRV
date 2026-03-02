@@ -1,0 +1,18 @@
+{
+  "session_id": "20260302_001350",
+  "start": "2026-03-02T05:13:50.342680+00:00",
+  "end": "2026-03-02T05:18:50.800282+00:00",
+  "label": "Baseline",
+  "notes": "",
+  "stats": {
+    "mean_hr": 56.5,
+    "sdnn": 70.25,
+    "rmssd": 69.39,
+    "lf_power": 255.33,
+    "hf_power": 140.78,
+    "lf_hf": 1.814,
+    "n_rr": 282,
+    "duration_sec": 300.34,
+    "artifact_rate": 0.4
+  }
+}

@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HRV Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f0e0d;
+      --surface: #1b1a18;
+      --surface2:#242220;
+      --border:  #302d2a;
+      --text:    #ede8e2;
+      --muted:   #857d74;
+      --accent-hr:    #4f86e8;
+      --accent-rmssd: #2fb584;
+      --accent-red:   #e8605f;
+      --accent-yellow:#e8a430;
+      --shadow:  none;
+      --radius:  10px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+
+    [data-theme="light"] {
+      --bg:      #f5f3f0;
+      --surface: #ffffff;
+      --surface2:#edeae6;
+      --border:  #dbd8d3;
+      --text:    #1c1a17;
+      --muted:   #7a7268;
+      --accent-hr:    #1e5fd4;
+      --accent-rmssd: #0d9464;
+      --accent-red:   #c83535;
+      --accent-yellow:#c47c10;
+      --shadow:  0 1px 3px rgba(0,0,0,.08), 0 1px 8px rgba(0,0,0,.04);
+      --radius:  10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-feature-settings: 'cv11', 'ss01';
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .header-title {
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .title-hrv     { font-weight: 700; }
+    .title-monitor { font-weight: 400; }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .status-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+    }
+    .status-connected    { background: rgba(47,181,132,.15); color: var(--accent-rmssd); }
+    .status-connected .dot { background: var(--accent-rmssd); }
+    .status-disconnected { background: rgba(232,96,95,.15); color: var(--accent-red); }
+    .status-disconnected .dot { background: var(--accent-red); }
+    .status-reconnecting { background: rgba(232,164,48,.15); color: var(--accent-yellow); }
+    .status-reconnecting .dot { background: var(--accent-yellow); animation: blink 1s step-end infinite; }
+    .status-scanning     { background: rgba(79,134,232,.15); color: var(--accent-hr); }
+    .status-scanning .dot { background: var(--accent-hr); animation: blink .7s step-end infinite; }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .device-name { font-size: 0.8rem; color: var(--muted); }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    select, input[type="text"] {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      font-family: var(--font);
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--accent-hr); }
+
+    button {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-family: var(--font);
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    button:hover { background: var(--border); }
+    button.primary { background: var(--accent-hr); color: #fff; border-color: var(--accent-hr); }
+    button.primary:hover { filter: brightness(1.15); }
+    button.danger { background: rgba(232,96,95,.2); color: var(--accent-red); border-color: var(--accent-red); }
+    button.danger:hover { background: rgba(232,96,95,.35); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #btnTheme {
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Metric Cards ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 16px 20px;
+    }
+
+    @media (max-width: 700px) {
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    [data-theme="light"] .card {
+      border-color: transparent;
+    }
+
+    .card-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .card-value {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .card-unit {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .card-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .hr-val   { color: var(--accent-hr); }
+    .rmssd-val{ color: var(--accent-rmssd); }
+    .ln-val   { color: #a78bfa; }
+
+    .artifact-high { color: var(--accent-red) !important; }
+    .artifact-med  { color: var(--accent-yellow) !important; }
+
+    /* Window selector inside artifact card */
+    .window-btns { display: flex; gap: 6px; margin-top: 8px; }
+    .window-btns button {
+      padding: 3px 10px;
+      font-size: 0.75rem;
+    }
+    .window-btns button.active {
+      background: var(--accent-hr);
+      border-color: var(--accent-hr);
+      color: #fff;
+    }
+
+    /* ── Chart ── */
+    .chart-section {
+      flex: 1;
+      padding: 0 20px 16px;
+    }
+    .chart-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      position: relative;
+      height: 260px;
+      box-shadow: var(--shadow);
+    }
+
+    [data-theme="light"] .chart-wrap {
+      border-color: transparent;
+    }
+
+    /* ── Session Controls ── */
+    .session-bar {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .session-label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+    .session-status {
+      margin-left: auto;
+      font-size: 0.8rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rec-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent-red);
+      animation: blink .8s step-end infinite;
+    }
+    .timer { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+
+    /* ── Summary Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.65);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.visible { display: flex; }
+
+    .modal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      min-width: 380px;
+      max-width: 520px;
+      width: 90vw;
+      position: relative;
+      box-shadow: var(--shadow);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .modal-title {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--text); background: none; }
+
+    .modal-subtitle {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .modal-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 0 16px;
+    }
+
+    .modal-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .modal-metric { text-align: center; }
+    .modal-metric-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .modal-metric-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .modal-metric-unit {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .modal-row {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .modal-row span { color: var(--text); }
+
+    .modal-note {
+      font-size: 0.72rem;
+      color: var(--accent-yellow);
+      margin: 8px 0 14px;
+    }
+
+    .modal-footer {
+      text-align: right;
+      margin-top: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="header-title">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:var(--accent-red);flex-shrink:0" aria-hidden="true">
+      <path d="M8 13.55L1.35 7.2C.48 6.34.48 4.93 1.35 4.07 2.22 3.2 3.63 3.2 4.5 4.07L8 7.53l3.5-3.46c.87-.87 2.28-.87 3.15 0 .87.86.87 2.27 0 3.13L8 13.55z"/>
+    </svg>
+    <span class="title-hrv">HRV</span><span class="title-monitor">&nbsp;Monitor</span>
+    <span id="statusBadge" class="status-badge status-disconnected">
+      <span class="dot"></span>
+      <span id="statusText">Disconnected</span>
+    </span>
+    <span id="deviceName" class="device-name"></span>
+  </div>
+
+  <div class="header-controls">
+    <select id="deviceSelect">
+      <option value="">— select device —</option>
+    </select>
+    <button id="btnScan" onclick="doScan()">⟳ Scan</button>
+    <button id="btnTheme" onclick="toggleTheme()" title="Toggle light/dark mode" aria-label="Toggle theme"></button>
+    <button id="btnConnect" class="primary" onclick="doConnect()">Connect</button>
+    <button id="btnDisconnect" class="danger" onclick="doDisconnect()" disabled>Disconnect</button>
+  </div>
+</header>
+
+<!-- ── Metric Cards ── -->
+<div class="metrics">
+  <div class="card">
+    <div class="card-label">Heart Rate</div>
+    <div class="card-value hr-val" id="valHR">—</div>
+    <div class="card-unit">bpm</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">RMSSD</div>
+    <div class="card-value rmssd-val" id="valRMSSD">—</div>
+    <div class="card-unit">ms</div>
+    <div class="card-sub" id="valRRCount">n = 0</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">ln RMSSD</div>
+    <div class="card-value ln-val" id="valLnRMSSD">—</div>
+    <div class="card-unit">&nbsp;</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Artifact Rate</div>
+    <div class="card-value" id="valArtifact">—</div>
+    <div class="card-unit">%</div>
+    <div class="window-btns">
+      <button id="w30"  onclick="setWindow(30)"  class="active">30s</button>
+      <button id="w60"  onclick="setWindow(60)">60s</button>
+      <button id="w120" onclick="setWindow(120)">120s</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Chart ── -->
+<div class="chart-section">
+  <div class="chart-wrap">
+    <canvas id="hrvChart"></canvas>
+  </div>
+</div>
+
+<!-- ── Session Bar ── -->
+<div class="session-bar">
+  <span class="session-label">Recording</span>
+
+  <span style="font-size:.8rem;color:var(--muted)">Label:</span>
+  <select id="labelSelect" onchange="onLabelChange()">
+    <option value="Baseline">Baseline</option>
+    <option value="Task">Task</option>
+    <option value="Recovery">Recovery</option>
+    <option value="Custom">Custom…</option>
+  </select>
+  <input type="text" id="customLabel" placeholder="Custom label" style="display:none;width:120px" />
+
+  <span style="font-size:.8rem;color:var(--muted)">Notes:</span>
+  <input type="text" id="sessionNotes" placeholder="Optional notes" style="width:180px" />
+
+  <button id="btnStart" class="primary" onclick="startSession()">▶ Start Recording</button>
+  <button id="btnStop" class="danger" onclick="stopSession()" disabled>■ Stop</button>
+
+  <div class="session-status" id="sessionStatus">
+    <span>Ready</span>
+  </div>
+</div>
+
+<!-- ── Summary Modal ── -->
+<div class="modal-overlay" id="summaryOverlay" onclick="overlayClick(event)">
+  <div class="modal-card" id="summaryCard">
+    <div class="modal-header">
+      <div class="modal-title">Session Summary</div>
+      <button class="modal-close" onclick="closeModal()" title="Close">✕</button>
+    </div>
+    <div class="modal-subtitle" id="modalSubtitle"></div>
+    <hr class="modal-divider" />
+    <div class="modal-metrics" id="modalMetrics"></div>
+    <div class="modal-row" id="modalPowers"></div>
+    <div class="modal-row" id="modalMeta"></div>
+    <div class="modal-note" id="modalNote" style="display:none"></div>
+    <div class="modal-footer">
+      <button onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const MAX_CHART_POINTS = 300;
+let windowSec = 30;
+let chartData = { labels: [], hr: [], rmssd: [] };
+let recording = false;
+let timerInterval = null;
+let timerStart = null;
+let ws = null;
+let wsRetryDelay = 1000;
+
+// ── Chart setup ────────────────────────────────────────────────────────────
+const ctx = document.getElementById('hrvChart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: chartData.labels,
+    datasets: [
+      {
+        label: 'HR (bpm)',
+        data: chartData.hr,
+        borderColor: '#4f86e8',
+        backgroundColor: 'rgba(79,134,232,.08)',
+        yAxisID: 'yHR',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        fill: true,
+      },
+      {
+        label: 'RMSSD (ms)',
+        data: chartData.rmssd,
+        borderColor: '#2fb584',
+        backgroundColor: 'rgba(47,181,132,.08)',
+        yAxisID: 'yRMSSD',
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+        fill: true,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 0 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        labels: { color: '#857d74', font: { size: 11 } }
+      },
+      tooltip: {
+        backgroundColor: '#242220',
+        borderColor: '#302d2a',
+        borderWidth: 1,
+        titleColor: '#ede8e2',
+        bodyColor: '#857d74',
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#857d74', maxTicksLimit: 8, font: { size: 10 } },
+        grid: { color: 'rgba(48,45,42,.6)' },
+      },
+      yHR: {
+        type: 'linear',
+        position: 'left',
+        ticks: { color: '#4f86e8', font: { size: 10 } },
+        grid: { color: 'rgba(48,45,42,.6)' },
+        title: { display: true, text: 'HR (bpm)', color: '#4f86e8', font: { size: 10 } },
+      },
+      yRMSSD: {
+        type: 'linear',
+        position: 'right',
+        ticks: { color: '#2fb584', font: { size: 10 } },
+        grid: { drawOnChartArea: false },
+        title: { display: true, text: 'RMSSD (ms)', color: '#2fb584', font: { size: 10 } },
+      },
+    },
+  },
+});
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+const MOON_SVG = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7z"/></svg>`;
+const SUN_SVG  = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.5"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/><line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/><line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/></svg>`;
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('btnTheme').innerHTML = theme === 'dark' ? SUN_SVG : MOON_SVG;
+  localStorage.setItem('theme', theme);
+  updateChartColors(theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+function updateChartColors(theme) {
+  const isDark = theme === 'dark';
+  const hrColor    = isDark ? '#4f86e8' : '#1e5fd4';
+  const hrBg       = isDark ? 'rgba(79,134,232,.08)'  : 'rgba(30,95,212,.07)';
+  const rmssdColor = isDark ? '#2fb584' : '#0d9464';
+  const rmssdBg    = isDark ? 'rgba(47,181,132,.08)'  : 'rgba(13,148,100,.07)';
+  const gridColor  = isDark ? 'rgba(48,45,42,.6)' : 'rgba(219,216,211,.8)';
+  const tickColor  = isDark ? '#857d74' : '#7a7268';
+
+  const ds = chart.data.datasets;
+  ds[0].borderColor = hrColor;    ds[0].backgroundColor = hrBg;
+  ds[1].borderColor = rmssdColor; ds[1].backgroundColor = rmssdBg;
+
+  chart.options.scales.x.ticks.color = tickColor;
+  chart.options.scales.x.grid.color  = gridColor;
+  chart.options.scales.yHR.ticks.color  = hrColor;
+  chart.options.scales.yHR.grid.color   = gridColor;
+  chart.options.scales.yHR.title.color  = hrColor;
+  chart.options.scales.yRMSSD.ticks.color = rmssdColor;
+  chart.options.scales.yRMSSD.title.color = rmssdColor;
+  chart.options.plugins.legend.labels.color = tickColor;
+  chart.options.plugins.tooltip.backgroundColor = isDark ? '#242220' : '#ffffff';
+  chart.options.plugins.tooltip.borderColor     = isDark ? '#302d2a' : '#dbd8d3';
+  chart.options.plugins.tooltip.titleColor      = isDark ? '#ede8e2' : '#1c1a17';
+  chart.options.plugins.tooltip.bodyColor       = tickColor;
+  chart.update('none');
+}
+
+// Init theme: localStorage → system preference → dark fallback
+const savedTheme = localStorage.getItem('theme')
+  || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+applyTheme(savedTheme);
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    wsRetryDelay = 1000;
+  };
+
+  ws.onmessage = (evt) => {
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch { return; }
+    handleMessage(msg);
+  };
+
+  ws.onclose = () => {
+    setTimeout(connectWS, wsRetryDelay);
+    wsRetryDelay = Math.min(wsRetryDelay * 1.5, 15000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'status':
+      updateStatus(msg);
+      break;
+    case 'data':
+      updateMetrics(msg);
+      pushChart(msg);
+      break;
+    case 'hr_only':
+      document.getElementById('valHR').textContent = msg.hr;
+      break;
+    case 'scan_result':
+      populateDeviceList(msg.devices);
+      break;
+    case 'session_started':
+      setRecording(true, msg.id);
+      break;
+    case 'session_stopped':
+      setRecording(false, msg.id);
+      if (msg.stats) showSummaryModal(msg.id, msg.stats);
+      break;
+    case 'error':
+      console.error('Server error:', msg.message);
+      break;
+  }
+}
+
+// ── Status updates ─────────────────────────────────────────────────────────
+function updateStatus(msg) {
+  const badge = document.getElementById('statusBadge');
+  const text  = document.getElementById('statusText');
+  const dname = document.getElementById('deviceName');
+  const btnConn = document.getElementById('btnConnect');
+  const btnDisc = document.getElementById('btnDisconnect');
+
+  badge.className = 'status-badge ';
+
+  if (msg.scanning) {
+    badge.className += 'status-scanning';
+    text.textContent = 'Scanning';
+    dname.textContent = '';
+  } else if (msg.reconnecting) {
+    badge.className += 'status-reconnecting';
+    text.textContent = `Reconnecting (${msg.attempt}/${3})`;
+    dname.textContent = msg.device || '';
+  } else if (msg.connected) {
+    badge.className += 'status-connected';
+    text.textContent = 'Connected';
+    dname.textContent = msg.device || '';
+    btnConn.disabled = true;
+    btnDisc.disabled = false;
+  } else {
+    badge.className += 'status-disconnected';
+    text.textContent = 'Disconnected';
+    dname.textContent = '';
+    btnConn.disabled = false;
+    btnDisc.disabled = true;
+  }
+
+  if (typeof msg.recording !== 'undefined') {
+    if (msg.recording !== recording) setRecording(msg.recording, null);
+  }
+}
+
+// ── Metrics ────────────────────────────────────────────────────────────────
+function updateMetrics(msg) {
+  document.getElementById('valHR').textContent = msg.hr;
+
+  if (msg.rmssd !== null && msg.rmssd !== undefined) {
+    document.getElementById('valRMSSD').textContent = msg.rmssd.toFixed(1);
+  }
+  if (msg.ln_rmssd !== null && msg.ln_rmssd !== undefined) {
+    document.getElementById('valLnRMSSD').textContent = msg.ln_rmssd.toFixed(2);
+  }
+  if (typeof msg.rr_count !== 'undefined') {
+    document.getElementById('valRRCount').textContent = `n = ${msg.rr_count}`;
+  }
+
+  const artEl = document.getElementById('valArtifact');
+  artEl.textContent = msg.artifact_rate !== undefined ? msg.artifact_rate.toFixed(1) : '—';
+  artEl.className = 'card-value';
+  if (msg.artifact_rate >= 10) artEl.classList.add('artifact-high');
+  else if (msg.artifact_rate >= 5) artEl.classList.add('artifact-med');
+}
+
+// ── Chart ──────────────────────────────────────────────────────────────────
+function pushChart(msg) {
+  if (msg.is_artifact) return;
+
+  const label = new Date(msg.ts * 1000).toLocaleTimeString();
+  chartData.labels.push(label);
+  chartData.hr.push(msg.hr);
+  chartData.rmssd.push(msg.rmssd);
+
+  const maxPts = Math.max(windowSec, 60);
+  if (chartData.labels.length > maxPts) {
+    chartData.labels.shift();
+    chartData.hr.shift();
+    chartData.rmssd.shift();
+  }
+
+  chart.update('none');
+}
+
+// ── Controls ───────────────────────────────────────────────────────────────
+async function doScan() {
+  document.getElementById('btnScan').disabled = true;
+  document.getElementById('deviceSelect').innerHTML = '<option value="">Scanning…</option>';
+  try {
+    const r = await fetch('/scan', { method: 'POST' });
+    const data = await r.json();
+    populateDeviceList(data.devices || []);
+  } catch (e) {
+    console.error('Scan failed', e);
+    document.getElementById('deviceSelect').innerHTML = '<option value="">Scan failed</option>';
+  } finally {
+    document.getElementById('btnScan').disabled = false;
+  }
+}
+
+function populateDeviceList(devices) {
+  const sel = document.getElementById('deviceSelect');
+  if (!devices.length) {
+    sel.innerHTML = '<option value="">No devices found</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— select device —</option>';
+  devices.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.address;
+    opt.dataset.name = d.name;
+    opt.textContent = `${d.name} (${d.address})`;
+    sel.appendChild(opt);
+  });
+}
+
+async function doConnect() {
+  const sel = document.getElementById('deviceSelect');
+  const opt = sel.selectedOptions[0];
+  if (!opt || !opt.value) { alert('Select a device first.'); return; }
+
+  document.getElementById('btnConnect').disabled = true;
+  await fetch('/connect', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address: opt.value, name: opt.dataset.name || opt.textContent }),
+  });
+}
+
+async function doDisconnect() {
+  await fetch('/disconnect', { method: 'POST' });
+}
+
+function setWindow(sec) {
+  windowSec = sec;
+  [30, 60, 120].forEach(s => {
+    document.getElementById(`w${s}`).classList.toggle('active', s === sec);
+  });
+  fetch('/hrv/window', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seconds: sec }),
+  });
+}
+
+// ── Session ────────────────────────────────────────────────────────────────
+function onLabelChange() {
+  const sel = document.getElementById('labelSelect').value;
+  document.getElementById('customLabel').style.display = sel === 'Custom' ? 'inline-block' : 'none';
+}
+
+function getLabel() {
+  const sel = document.getElementById('labelSelect').value;
+  if (sel === 'Custom') {
+    return document.getElementById('customLabel').value || 'Custom';
+  }
+  return sel;
+}
+
+async function startSession() {
+  const label = getLabel();
+  const notes = document.getElementById('sessionNotes').value;
+  await fetch('/session/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label, notes }),
+  });
+}
+
+async function stopSession() {
+  await fetch('/session/stop', { method: 'POST' });
+}
+
+function setRecording(active, sessionId) {
+  recording = active;
+  const btnStart = document.getElementById('btnStart');
+  const btnStop  = document.getElementById('btnStop');
+  const statusEl = document.getElementById('sessionStatus');
+
+  btnStart.disabled = active;
+  btnStop.disabled  = !active;
+
+  if (active) {
+    timerStart = Date.now();
+    timerInterval = setInterval(updateTimer, 1000);
+    statusEl.innerHTML = `<span class="rec-dot"></span> Recording <span class="timer" id="timerVal">00:00:00</span>`;
+    if (sessionId) statusEl.innerHTML += ` &nbsp; <span style="color:var(--muted);font-size:.75rem">${sessionId}</span>`;
+  } else {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    statusEl.innerHTML = sessionId
+      ? `<span style="color:var(--accent-rmssd)">✓ Saved — ${sessionId}</span>`
+      : '<span>Ready</span>';
+  }
+}
+
+function updateTimer() {
+  const el = document.getElementById('timerVal');
+  if (!el) return;
+  const elapsed = Math.floor((Date.now() - timerStart) / 1000);
+  const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+  const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+  const s = String(elapsed % 60).padStart(2, '0');
+  el.textContent = `${h}:${m}:${s}`;
+}
+
+// ── Summary Modal ──────────────────────────────────────────────────────────
+function fmt(val, dp, fallback='—') {
+  return (val !== null && val !== undefined) ? val.toFixed(dp) : fallback;
+}
+
+function showSummaryModal(sessionId, stats) {
+  const durSec = stats.duration_sec || 0;
+  const h = Math.floor(durSec / 3600);
+  const m = Math.floor((durSec % 3600) / 60);
+  const s = Math.floor(durSec % 60);
+  const durStr = h > 0
+    ? `${h}h ${m}m ${s}s`
+    : m > 0
+      ? `${m}m ${s}s`
+      : `${s}s`;
+
+  document.getElementById('modalSubtitle').textContent =
+    `${sessionId || ''}  ·  ${durStr}`;
+
+  const metricsEl = document.getElementById('modalMetrics');
+  metricsEl.innerHTML = [
+    { label: 'Mean HR',  value: fmt(stats.mean_hr, 1),  unit: 'bpm', color: 'var(--accent-hr)' },
+    { label: 'SDNN',     value: fmt(stats.sdnn, 1),      unit: 'ms',  color: 'var(--accent-rmssd)' },
+    { label: 'RMSSD',    value: fmt(stats.rmssd, 1),     unit: 'ms',  color: 'var(--accent-rmssd)' },
+    { label: 'LF/HF',    value: fmt(stats.lf_hf, 2),    unit: '',    color: '#a78bfa' },
+  ].map(m => `
+    <div class="modal-metric">
+      <div class="modal-metric-label">${m.label}</div>
+      <div class="modal-metric-value" style="color:${m.color}">${m.value}</div>
+      <div class="modal-metric-unit">${m.unit}</div>
+    </div>
+  `).join('');
+
+  const powersEl = document.getElementById('modalPowers');
+  if (stats.lf_power !== null && stats.lf_power !== undefined) {
+    powersEl.innerHTML = `LF: <span>${fmt(stats.lf_power, 1)} ms²</span>&nbsp;&nbsp;HF: <span>${fmt(stats.hf_power, 1)} ms²</span>`;
+  } else {
+    powersEl.innerHTML = '';
+  }
+
+  document.getElementById('modalMeta').innerHTML =
+    `n = <span>${stats.n_rr ?? '—'} beats</span>&nbsp;&nbsp;Artifact rate: <span>${fmt(stats.artifact_rate, 1)}%</span>`;
+
+  const noteEl = document.getElementById('modalNote');
+  if (stats.lf_hf === null || stats.lf_hf === undefined) {
+    noteEl.textContent = '⚠ LF/HF requires ≥30 clean beats and ≥60s of data';
+    noteEl.style.display = 'block';
+  } else {
+    noteEl.style.display = 'none';
+  }
+
+  document.getElementById('summaryOverlay').classList.add('visible');
+}
+
+function closeModal() {
+  document.getElementById('summaryOverlay').classList.remove('visible');
+}
+
+function overlayClick(evt) {
+  if (evt.target === document.getElementById('summaryOverlay')) closeModal();
+}
+
+document.addEventListener('keydown', (evt) => {
+  if (evt.key === 'Escape') closeModal();
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────
+connectWS();
+</script>
+</body>
+</html>
