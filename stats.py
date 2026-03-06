@@ -95,6 +95,7 @@ def compute_session_stats(
             "mean_hr": None,
             "sdnn": None,
             "rmssd": None,
+            "ln_rmssd": None,
             "lf_power": None,
             "hf_power": None,
             "lf_hf": None,
@@ -121,10 +122,13 @@ def compute_session_stats(
     # --- Frequency-domain ---
     lf_power, hf_power, lf_hf = _compute_lf_hf(rr_data)
 
+    ln_rmssd = round(math.log(rmssd), 4) if rmssd and rmssd > 0 else None
+
     return {
         "mean_hr": mean_hr,
         "sdnn": sdnn,
         "rmssd": rmssd,
+        "ln_rmssd": ln_rmssd,
         "lf_power": round(lf_power, 2) if lf_power is not None else None,
         "hf_power": round(hf_power, 2) if hf_power is not None else None,
         "lf_hf": round(lf_hf, 3) if lf_hf is not None else None,

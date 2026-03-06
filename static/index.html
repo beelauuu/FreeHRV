@@ -876,7 +876,7 @@ function showSummaryModal(sessionId, stats) {
     { label: 'Mean HR',  value: fmt(stats.mean_hr, 1),  unit: 'bpm', color: 'var(--accent-hr)' },
     { label: 'SDNN',     value: fmt(stats.sdnn, 1),      unit: 'ms',  color: 'var(--accent-rmssd)' },
     { label: 'RMSSD',    value: fmt(stats.rmssd, 1),     unit: 'ms',  color: 'var(--accent-rmssd)' },
-    { label: 'LF/HF',    value: fmt(stats.lf_hf, 2),    unit: '',    color: '#a78bfa' },
+    { label: 'ln RMSSD', value: fmt(stats.ln_rmssd, 2),  unit: '',    color: '#a78bfa' },
   ].map(m => `
     <div class="modal-metric">
       <div class="modal-metric-label">${m.label}</div>
@@ -885,23 +885,12 @@ function showSummaryModal(sessionId, stats) {
     </div>
   `).join('');
 
-  const powersEl = document.getElementById('modalPowers');
-  if (stats.lf_power !== null && stats.lf_power !== undefined) {
-    powersEl.innerHTML = `LF: <span>${fmt(stats.lf_power, 1)} ms²</span>&nbsp;&nbsp;HF: <span>${fmt(stats.hf_power, 1)} ms²</span>`;
-  } else {
-    powersEl.innerHTML = '';
-  }
+  document.getElementById('modalPowers').innerHTML = '';
 
   document.getElementById('modalMeta').innerHTML =
     `n = <span>${stats.n_rr ?? '—'} beats</span>&nbsp;&nbsp;Artifact rate: <span>${fmt(stats.artifact_rate, 1)}%</span>`;
 
-  const noteEl = document.getElementById('modalNote');
-  if (stats.lf_hf === null || stats.lf_hf === undefined) {
-    noteEl.textContent = '⚠ LF/HF requires ≥30 clean beats and ≥60s of data';
-    noteEl.style.display = 'block';
-  } else {
-    noteEl.style.display = 'none';
-  }
+  document.getElementById('modalNote').style.display = 'none';
 
   document.getElementById('summaryOverlay').classList.add('visible');
 }
