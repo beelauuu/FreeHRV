@@ -1,6 +1,7 @@
 """Session summary statistics: time-domain and frequency-domain HRV metrics."""
 
 import math
+from scipy.signal import detrend
 
 
 def _compute_lf_hf(rr_data: list[tuple[float, float]]) -> tuple[float | None, float | None, float | None]:
@@ -16,15 +17,18 @@ def _compute_lf_hf(rr_data: list[tuple[float, float]]) -> tuple[float | None, fl
     if len(rr_data) < 30:
         return None, None, None
 
-    timestamps = [ts for ts, _ in rr_data]
     rr_ms = [rr for _, rr in rr_data]
 
-    duration_sec = timestamps[-1] - timestamps[0]
+    # Build time axis from cumulative RR intervals.
+    # Wall-clock timestamps are unreliable: multiple RR intervals per BLE
+    # packet share the same timestamp, making np.interp produce garbage.
+    # Cumulative RR gives the true beat-to-beat timeline.
+    t_rel = [0.0]
+    for rr in rr_ms[:-1]:
+        t_rel.append(t_rel[-1] + rr / 1000.0)
+    duration_sec = t_rel[-1]
     if duration_sec < 60:
         return None, None, None
-
-    # Build relative time axis
-    t_rel = [ts - timestamps[0] for ts in timestamps]
 
     # Resample at 4 Hz
     fs = 4.0
@@ -35,8 +39,8 @@ def _compute_lf_hf(rr_data: list[tuple[float, float]]) -> tuple[float | None, fl
     t_uniform = np.linspace(0, duration_sec, n_samples)
     rr_resampled = np.interp(t_uniform, t_rel, rr_ms)
 
-    # Detrend (subtract mean) and apply Hann window
-    rr_detrended = rr_resampled - np.mean(rr_resampled)
+    # Detrend (remove linear trend) and apply Hann window
+    rr_detrended = detrend(rr_resampled, type='linear')
     window = np.hanning(n_samples)
     rr_windowed = rr_detrended * window
 
